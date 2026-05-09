@@ -10,7 +10,6 @@ WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 
 DB_PATH = "/data/users.db"
 
-# Vytvorenie databázy a tabuľky pri štarte
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -23,7 +22,7 @@ def init_db():
     """)
     conn.commit()
     conn.close()
-    print("✅ Databáza inicializovaná")
+    print("✅ Database initialized")
 
 init_db()
 
@@ -33,48 +32,38 @@ async def stripe_webhook(request: Request):
     sig_header = request.headers.get("stripe-signature")
 
     try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, WEBHOOK_SECRET
-        )
-        print(f"✅ Event prijatý: {event['type']}")
+        event = stripe.Webhook.construct_event(payload, sig_header, WEBHOOK_SECRET)
+        print(f"✅ Event: {event['type']}")
     except Exception as e:
         print(f"❌ Signature error: {e}")
         raise HTTPException(status_code=400)
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
+        metadata = getattr(session, 'metadata', None)
         
-        metadata = session.metadata if hasattr(session, "metadata") else {}
-        user_id_str = getattr(metadata, "telegram_user_id", None)
-        
-        print(f"🎉 Platba úspešná pre user_id: {user_id_str}")
+        user_id = getattr(metadata, 'telegram_user_id', None)
+        print(f"🔍 User ID from metadata: {user_id}")
 
-        if user_id_str:
+        if user_id:
             try:
                 conn = sqlite3.connect(DB_PATH)
                 cursor = conn.cursor()
                 
                 cursor.execute("""
-                    UPDATE users 
-                    SET is_premium = 1 
-                    WHERE user_id = ?
-                """, (int(user_id_str),))
-                
-                # Ak používateľ ešte v DB nebol, vložíme ho
-                if cursor.rowcount == 0:
-                    cursor.execute("""
-                        INSERT INTO users (user_id, is_premium) 
-                        VALUES (?, 1)
-                    """, (int(user_id_str),))
+                    INSERT INTO users (user_id, is_premium)
+                    VALUES (?, 1)
+                    ON CONFLICT(user_id) DO UPDATE SET is_premium = 1
+                """, (int(user_id),))
                 
                 conn.commit()
                 conn.close()
-                print(f"✅ Prémiový prístup aktivovaný pre user {user_id_str}")
+                print(f"🎉 PREMIUM SUCCESSFULLY ACTIVATED for user {user_id}")
             except Exception as e:
-                print(f"❌ Chyba databázy: {e}")
+                print(f"❌ DB Error: {e}")
 
     return {"status": "success"}
 
 @app.get("/")
 async def health():
-    return {"status": "webhook is running ✅"}
+    return {"status": "webhook running ✅"}
