@@ -16,9 +16,9 @@ async def stripe_webhook(request: Request):
         event = stripe.Webhook.construct_event(
             payload, sig_header, WEBHOOK_SECRET
         )
-        print(f"✅ Event prijatý: {event['type']}")
+        print(f"✅ Event: {event['type']}")
     except Exception as e:
-        print(f"❌ Chyba signature: {e}")
+        print(f"❌ Signature error: {e}")
         raise HTTPException(status_code=400)
 
     if event["type"] == "checkout.session.completed":
@@ -28,9 +28,11 @@ async def stripe_webhook(request: Request):
         user_id = getattr(metadata, "telegram_user_id", None)
         
         print("🎉 PLATBA ÚSPEŠNE PRIJATÁ!")
-        print(f"   User ID: {user_id}")
-        print(f"   Session: {getattr(session, 'id', 'N/A')}")
+        print(f"   Telegram User ID: {user_id}")
+        print(f"   Session ID: {getattr(session, 'id', 'N/A')}")
         print(f"   Amount: {getattr(session, 'amount_total', 'N/A')}")
+
+        # Tu neskôr pridáme logiku na odomknutie prémií pre používateľa
 
     return {"status": "success"}
 
